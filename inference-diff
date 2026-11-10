@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""Compare two live LFM3 inference paths on the same token history."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+from importlib.metadata import version
+from pathlib import Path
+
+
+class ObservedLayer:
+    """Record the final query row and return the original output unchanged."""
+
+    def __init__(self, layer, rows):
+        self.layer = layer
+        self.rows = rows
+
+    def __getattr__(self, name):
+        return getattr(self.layer, name)
+
+    def __call__(self, *args, **kwargs):
+        output = self.layer(*args, **kwargs)
+        self.rows.append(output[0, -1])
+        return output
+
+
+def forward(mx, model, cache, ids, *, observe=True):
+    backbone = model.language_model.model
+    original = backbone.layers
+    rows = []
+    if observe:
+        backbone.layers = [ObservedLayer(layer, rows) for layer in original]
+    try:
+        logits = model.language_model(mx.array([ids]), cache=cache).logits[0, -1]
+        mx.eval(logits, rows, [entry.state for entry in cache])
+    finally:
+        if observe:
+            backbone.layers = original
+    return logits.astype(mx.float32), rows
+
+
+def file_hash(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def checkpoint(path):
+    config = json.loads((path / "config.json").read_text())
+    if config.get("model_type") != "lfm3":
+        raise ValueError("this adapter requires an LFM3 checkpoint")
+    files = sorted(path.glob("*.safetensors"))
+    if not files:
+        raise ValueError(f"no safetensors weights in {path}")
+    return {
+        "path": str(path.resolve()),
+        "files_sha256": {
+            file.name: file_hash(file)
+            for file in [path / "config.json", path / "tokenizer.json", *files]
+        },
+        "eos_token_id": config["eos_token_id"],
+    }
+
+
+def prompt_ids(processor, prompt):
+    tokenizer = getattr(processor, "tokenizer", processor)
+    rendered = tokenizer.apply_chat_template(
+        [{"role": "user", "content": prompt}],
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+    return tokenizer, tokenizer.encode(rendered, add_special_tokens=False)
+
+
+def describe_step(mx, left, right):
+    a, ar = left
+    b, br = right
+    if a.shape != b.shape or len(ar) != len(br) or [x.shape for x in ar] != [x.shape for x in br]:
+        raise ValueError("logit vocabulary or observed layer shapes differ")
+    finite = [mx.all(mx.isfinite(x)) for x in [a, b, *ar, *br]]
+    if not bool(mx.all(mx.stack(finite)).item()):
+        raise ValueError("nonfinite logits or decoder activations")
+    lp, rp = a - mx.logsumexp(a), b - mx.logsumexp(b)
+    lt, rt = int(mx.argmax(a).item()), int(mx.argmax(b).item())
+    layer_delta = mx.stack([mx.max(mx.abs(x.astype(mx.float32) - y.astype(mx.float32)))
+                            for x, y in zip(ar, br, strict=True)]).tolist()
+    return {
+        "left_token_id": lt,
+        "right_token_id": rt,
+        "left_margin": abs(float(mx.diff(mx.topk(a, 2)).item())),
+        "right_margin": abs(float(mx.diff(mx.topk(b, 2)).item())),
+        "left_logp_at_choices": [float(lp[lt].item()), float(lp[rt].item())],
+        "right_logp_at_choices": [float(rp[lt].item()), float(rp[rt].item())],
+        "max_abs_logit_delta": float(mx.max(mx.abs(a - b)).item()),
+        "max_abs_logprob_delta": float(mx.max(mx.abs(lp - rp)).item()),
+        "layer_max_abs_delta": layer_delta,
+        "first_observed_changed_layer": next((i for i, delta in enumerate(layer_delta) if delta), None),
+    }
+
+
+def compare(mx, models, ids, chunks, limit, eos):
+    caches = [model.make_cache() for model in models]
+    tail = []
+    for model, cache, chunk in zip(models, caches, chunks, strict=True):
+        chunk = chunk or len(ids)
+        last = ((len(ids) - 1) // chunk) * chunk
+        for start in range(0, last, chunk):
+            forward(mx, model, cache, ids[start:start + chunk], observe=False)
+        tail.append(ids[last:])
+
+    steps, prefix = [], []
+    status = "token_budget"
+    for position in range(limit):
+        try:
+            row = describe_step(mx, *[
+                forward(mx, model, cache, segment)
+                for model, cache, segment in zip(models, caches, tail, strict=True)
+            ])
+        except ValueError as exc:
+            raise ValueError(f"output position {position}: {exc}") from exc
+        steps.append({"position": position, **row})
+        left, right = row["left_token_id"], row["right_token_id"]
+        if left != right:
+            status = "token_divergence"
+            break
+        prefix.append(left)
+        if left in eos:
+            status = "shared_eos"
+            break
+        tail = [[left], [left]]
+    return {"stop": status, "shared_generated_prefix": prefix, "steps": steps}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model", required=True, type=Path, help="local LFM3 MLX checkpoint")
+    parser.add_argument("--right-model", type=Path, help="optional second checkpoint with the same tokenizer")
+    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--left-chunk", type=int, default=0, help="left prefill chunk size, 0 uses one chunk")
+    parser.add_argument("--right-chunk", type=int, default=16, help="right prefill chunk size, 0 uses one chunk")
+    parser.add_argument("--tokens", type=int, choices=range(1, 257), default=16, metavar="1..256")
+    parser.add_argument("--output", type=Path, help="save JSON to a new file")
+    args = parser.parse_args()
+    chunks = [args.left_chunk, args.right_chunk]
+    if min(chunks) < 0 or not args.prompt.strip():
+        parser.error("prefill chunks must be nonnegative and prompt must be nonempty")
+    if args.output and args.output.exists():
+        parser.error("output already exists")
+    try:
+        import mlx.core as mx
+        from mlx_vlm import load
+
+        if not mx.metal.is_available():
+            raise RuntimeError("a Metal GPU is required")
+        mx.set_default_device(mx.gpu)
+        left_path = args.model.resolve()
+        right_path = (args.right_model or left_path).resolve()
+        left_source = checkpoint(left_path)
+        right_source = left_source if left_path == right_path else checkpoint(right_path)
+        if left_source["files_sha256"]["tokenizer.json"] != right_source["files_sha256"]["tokenizer.json"]:
+            raise ValueError("checkpoint tokenizer hashes differ")
+        if left_source["eos_token_id"] != right_source["eos_token_id"]:
+            raise ValueError("checkpoint EOS IDs differ")
+        lm, processor = load(str(left_path))
+        tokenizer, ids = prompt_ids(processor, args.prompt)
+        if not ids:
+            raise ValueError("empty rendered prompt")
+        rm = lm
+        if right_path != left_path:
+            rm, processor = load(str(right_path))
+            if ids != prompt_ids(processor, args.prompt)[1]:
+                raise ValueError("checkpoint prompt token IDs differ")
+        layers = [layer.layer_type for layer in lm.language_model.layers]
+        if layers != [layer.layer_type for layer in rm.language_model.layers]:
+            raise ValueError("checkpoint decoder layer layouts differ")
+        eos = left_source["eos_token_id"]
+        result = compare(mx, [lm, rm], ids, chunks, args.tokens, {eos} if isinstance(eos, int) else set(eos))
+        for step in result["steps"]:
+            for side in ("left", "right"):
+                step[f"{side}_token_text"] = tokenizer.decode(
+                    [step[f"{side}_token_id"]], skip_special_tokens=False
+                )
+        document = {
+            "schema": "inference-diff-v1",
+            "device": mx.device_info()["device_name"],
+            "versions": {name: version(name) for name in ("mlx", "mlx-vlm", "transformers")},
+            "checkpoints": [left_source, right_source],
+            "layer_types": layers,
+            "prefill_chunks": chunks,
+            "output_token_limit": args.tokens,
+            "prompt_token_ids": ids,
+            "first_numerical_difference": next(
+                (step["position"] for step in result["steps"]
+                 if step["max_abs_logit_delta"] or step["first_observed_changed_layer"] is not None),
+                None,
+            ),
+            **result,
+        }
+        output = json.dumps(document, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+        if args.output:
+            with args.output.open("x") as handle:
+                handle.write(output)
+            if result["stop"] == "token_divergence":
+                last = result["steps"][-1]
+                print(
+                    f"Output token {last['position']} differs. "
+                    f"Left {last['left_token_text']!r} ({last['left_token_id']}), "
+                    f"right {last['right_token_text']!r} ({last['right_token_id']})."
+                )
+            else:
+                print(f"Both paths emitted {len(result['shared_generated_prefix'])} identical tokens.")
+            first = document["first_numerical_difference"]
+            if first is not None:
+                layer = result["steps"][first]["first_observed_changed_layer"]
+                site = "logits" if layer is None else f"decoder layer {layer}"
+                print(f"First observed numerical drift at output position {first}, {site}.")
+            print(f"Report saved to {args.output}")
+        else:
+            sys.stdout.write(output)
+    except (ImportError, OSError, RuntimeError, ValueError) as exc:
+        parser.exit(2, f"inference-diff: {exc}\n")
+
+
+if __name__ == "__main__":
+    main()

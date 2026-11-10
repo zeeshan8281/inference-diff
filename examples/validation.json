@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-11",
+  "device": "Apple M4",
+  "python": "3.12.13",
+  "environment": "fresh venv populated from the cached wheels using requirements-m4.txt",
+  "model_source": "LiquidAI/LFM3-1.7B-MLX-4bit",
+  "model_revision": "91f34088d6946482cbcae11b85d4657093618c34",
+  "checkpoint": "existing pinned local snapshot; no fresh download during this run",
+  "example_transformation": "Only local checkpoint path strings replaced",
+  "cli_sha256": "c1866423a3e291b3ba963b20c8c48d91d7cb27365e2b7ae6f747078d11020d8b",
+  "requirements_sha256": "a30f30254bcffce6d6a2379cd8f8a2cc56b1b448330d91f2a615e8a2365028d9",
+  "cases": {
+    "split": {
+      "raw_sha256": "ba5b385b3e8a588ce40bb8ac096c0e64e4bbc368da5396335038745cb6de3893",
+      "public_sha256": "85da2717d95055e71320120c73ab649441be3d022264725974a41c4ff0869df7",
+      "matches_previous_capture": true
+    },
+    "control": {
+      "raw_sha256": "a8be5882ae648f3fd2ca4084eb0cba4cd051e13e1ce30361424b538d02cca591",
+      "public_sha256": "49d557d37cae9eb6fa94d94219aa2c7a610571518edfd5be837060e81eccbb18",
+      "matches_previous_capture": true
+    },
+    "drift": {
+      "raw_sha256": "796e42be57f05663b5f7a0e25f7fa5a80caff33a79d894a5ebb2f30ec00cc726",
+      "public_sha256": "79e3bdb4b83af43f3bb0bb2534c2930681223279e792b76184e84128dc22b7e1",
+      "matches_previous_capture": true
+    }
+  },
+  "macos": {
+    "version": "26.6.2",
+    "build": "25G83"
+  },
+  "uv_version": "0.11.8",
+  "hash_scope": "Raw hashes identify pre-sanitization local captures. Public hashes verify the bundled examples."
+}

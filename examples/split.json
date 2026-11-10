@@ -1,0 +1,240 @@
+{
+  "schema": "inference-diff-v1",
+  "device": "Apple M4",
+  "versions": {
+    "mlx": "0.32.4",
+    "mlx-vlm": "0.7.12",
+    "transformers": "5.22.2"
+  },
+  "checkpoints": [
+    {
+      "path": "<local-model-directory>",
+      "files_sha256": {
+        "config.json": "7df2ea819f9a31b770192a0a9dc1b7953a7dd8c41b816cc3905bbec99ef332bd",
+        "tokenizer.json": "41927bd314d17d7d7fadb44e10cd0919f7b71528d7741596d8cbd15c6945ec44",
+        "model.safetensors": "1be5bf672013cd91aa62148f77c5eea8d2784a95845d5fe826e08c7b84823815"
+      },
+      "eos_token_id": [
+        124900
+      ]
+    },
+    {
+      "path": "<local-model-directory>",
+      "files_sha256": {
+        "config.json": "7df2ea819f9a31b770192a0a9dc1b7953a7dd8c41b816cc3905bbec99ef332bd",
+        "tokenizer.json": "41927bd314d17d7d7fadb44e10cd0919f7b71528d7741596d8cbd15c6945ec44",
+        "model.safetensors": "1be5bf672013cd91aa62148f77c5eea8d2784a95845d5fe826e08c7b84823815"
+      },
+      "eos_token_id": [
+        124900
+      ]
+    }
+  ],
+  "layer_types": [
+    "conv",
+    "conv",
+    "full_attention",
+    "conv",
+    "sliding_attention",
+    "conv",
+    "full_attention",
+    "conv",
+    "sliding_attention",
+    "conv",
+    "full_attention",
+    "conv",
+    "sliding_attention",
+    "conv",
+    "full_attention",
+    "conv",
+    "sliding_attention",
+    "conv",
+    "full_attention",
+    "conv",
+    "sliding_attention",
+    "conv",
+    "full_attention",
+    "conv"
+  ],
+  "prefill_chunks": [
+    0,
+    4
+  ],
+  "output_token_limit": 32,
+  "prompt_token_ids": [
+    124894,
+    124899,
+    5922,
+    207,
+    48186,
+    532,
+    3660,
+    296,
+    734,
+    18068,
+    34,
+    2644,
+    278,
+    15528,
+    13024,
+    20,
+    278,
+    4861,
+    4424,
+    14086,
+    22,
+    124900,
+    207,
+    124899,
+    63514,
+    207,
+    124901,
+    124902
+  ],
+  "first_numerical_difference": 0,
+  "stop": "token_divergence",
+  "shared_generated_prefix": [
+    597,
+    15528
+  ],
+  "steps": [
+    {
+      "position": 0,
+      "left_token_id": 597,
+      "right_token_id": 597,
+      "left_margin": 1.75,
+      "right_margin": 1.75,
+      "left_logp_at_choices": [
+        -0.16607666015625,
+        -0.16607666015625
+      ],
+      "right_logp_at_choices": [
+        -0.1657428741455078,
+        -0.1657428741455078
+      ],
+      "max_abs_logit_delta": 0.296875,
+      "max_abs_logprob_delta": 0.2965412139892578,
+      "layer_max_abs_delta": [
+        0.00048828125,
+        0.0009765625,
+        0.0009765625,
+        0.001220703125,
+        0.00146484375,
+        0.00390625,
+        0.002838134765625,
+        0.005859375,
+        0.00390625,
+        0.0048828125,
+        0.00537109375,
+        0.00537109375,
+        0.0068359375,
+        0.0078125,
+        0.0068359375,
+        0.0078125,
+        0.0078125,
+        0.0087890625,
+        0.015625,
+        0.015625,
+        0.015625,
+        0.0126953125,
+        0.0146484375,
+        0.0390625
+      ],
+      "first_observed_changed_layer": 0,
+      "left_token_text": "The",
+      "right_token_text": "The"
+    },
+    {
+      "position": 1,
+      "left_token_id": 15528,
+      "right_token_id": 15528,
+      "left_margin": 2.5,
+      "right_margin": 2.625,
+      "left_logp_at_choices": [
+        -0.17294883728027344,
+        -0.17294883728027344
+      ],
+      "right_logp_at_choices": [
+        -0.1594829559326172,
+        -0.1594829559326172
+      ],
+      "max_abs_logit_delta": 0.3125,
+      "max_abs_logprob_delta": 0.25997161865234375,
+      "layer_max_abs_delta": [
+        0.00048828125,
+        0.001953125,
+        0.001953125,
+        0.0009765625,
+        0.0013427734375,
+        0.00390625,
+        0.0020751953125,
+        0.00390625,
+        0.0078125,
+        0.0029296875,
+        0.00390625,
+        0.00390625,
+        0.005859375,
+        0.00390625,
+        0.01171875,
+        0.0078125,
+        0.015625,
+        0.021484375,
+        0.015625,
+        0.015625,
+        0.03125,
+        0.0390625,
+        0.03125,
+        0.03515625
+      ],
+      "first_observed_changed_layer": 0,
+      "left_token_text": " clock",
+      "right_token_text": " clock"
+    },
+    {
+      "position": 2,
+      "left_token_id": 13024,
+      "right_token_id": 589,
+      "left_margin": 0.25,
+      "right_margin": 0.0,
+      "left_logp_at_choices": [
+        -1.0827178955078125,
+        -1.3327178955078125
+      ],
+      "right_logp_at_choices": [
+        -1.1926956176757812,
+        -1.1926956176757812
+      ],
+      "max_abs_logit_delta": 0.21875,
+      "max_abs_logprob_delta": 0.20372772216796875,
+      "layer_max_abs_delta": [
+        0.00048828125,
+        0.00048828125,
+        0.0009765625,
+        0.0009765625,
+        0.0029296875,
+        0.00115966796875,
+        0.001953125,
+        0.0078125,
+        0.00390625,
+        0.0020751953125,
+        0.00244140625,
+        0.0078125,
+        0.0234375,
+        0.0234375,
+        0.0078125,
+        0.013671875,
+        0.015625,
+        0.0234375,
+        0.02734375,
+        0.03125,
+        0.0234375,
+        0.0174560546875,
+        0.03125,
+        0.017578125
+      ],
+      "first_observed_changed_layer": 0,
+      "left_token_text": " stopped",
+      "right_token_text": "'s"
+    }
+  ]
+}
